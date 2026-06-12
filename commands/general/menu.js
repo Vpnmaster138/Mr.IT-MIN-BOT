@@ -149,6 +149,9 @@ module.exports = {
       menuText += `╰━━━━━━━━━━━━━━━━━\n\n`;
       menuText += `💡 Type ${config.prefix}help <command> for more info\n`;
       menuText += `🌟 Bot Version: 1.0.0\n`;
+      if (config.social && config.social.group) {
+        menuText += `🔗 Join Group: ${config.social.group}\n`;
+      };
       
       // Send menu with image
       const fs = require('fs');
