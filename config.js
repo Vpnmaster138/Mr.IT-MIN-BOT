@@ -4,7 +4,7 @@
 
 module.exports = {
     // Bot Owner Configuration
-    ownerNumber: ['255623647378'],
+    ownerNumber: ['255625397378'],
     ownerName: ['MR.IT MEDIATOR'],
 
     // Bot Configuration
