@@ -436,6 +436,47 @@ async function startBot() {
     // Silently handle message updates
   });
 
+  // Auto Read Status - soma status za contacts zote
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      const from = msg.key?.remoteJid;
+      if (!from) continue;
+
+      // Auto Read Status
+      if (config.autoReadStatus && from === 'status@broadcast') {
+        try {
+          await sock.readMessages([msg.key]);
+        } catch (e) {}
+      }
+
+      // Auto Like Status
+      if (config.autoLikeStatus && from === 'status@broadcast') {
+        try {
+          await sock.sendMessage('status@broadcast', {
+            react: { text: '❤️', key: msg.key }
+          });
+        } catch (e) {}
+      }
+    }
+  });
+
+  // Auto Recording - bot ionekane inafanya recording
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    if (!config.autoRecording) return;
+    for (const msg of messages) {
+      const from = msg.key?.remoteJid;
+      if (!from || from === 'status@broadcast') continue;
+      try {
+        await sock.sendPresenceUpdate('recording', from);
+        setTimeout(async () => {
+          try { await sock.sendPresenceUpdate('paused', from); } catch (e) {}
+        }, 3000);
+      } catch (e) {}
+    }
+  });
+
   // Group participant updates (join/leave)
   sock.ev.on('group-participants.update', async (update) => {
     await handler.handleGroupUpdate(sock, update);
