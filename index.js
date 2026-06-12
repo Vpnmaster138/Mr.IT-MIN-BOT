@@ -63,6 +63,7 @@ const {
 const qrcode = require('qrcode-terminal');
 const config = require('./config');
 const handler = require('./handler');
+const { groqReply } = require('./utils/groqChat');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -436,6 +437,47 @@ async function startBot() {
     // Silently handle message updates
   });
 
+  // Auto Read Status - soma status za contacts zote
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      const from = msg.key?.remoteJid;
+      if (!from) continue;
+
+      // Auto Read Status
+      if (config.autoReadStatus && from === 'status@broadcast') {
+        try {
+          await sock.readMessages([msg.key]);
+        } catch (e) {}
+      }
+
+      // Auto Like Status
+      if (config.autoLikeStatus && from === 'status@broadcast') {
+        try {
+          await sock.sendMessage('status@broadcast', {
+            react: { text: '❤️', key: msg.key }
+          });
+        } catch (e) {}
+      }
+    }
+  });
+
+  // Auto Recording - bot ionekane inafanya recording
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    if (!config.autoRecording) return;
+    for (const msg of messages) {
+      const from = msg.key?.remoteJid;
+      if (!from || from === 'status@broadcast') continue;
+      try {
+        await sock.sendPresenceUpdate('recording', from);
+        setTimeout(async () => {
+          try { await sock.sendPresenceUpdate('paused', from); } catch (e) {}
+        }, 3000);
+      } catch (e) {}
+    }
+  });
+
   // Group participant updates (join/leave)
   sock.ev.on('group-participants.update', async (update) => {
     await handler.handleGroupUpdate(sock, update);
@@ -499,3 +541,149 @@ process.on('unhandledRejection', (err) => {
 });
 // Export store for use in commands
 module.exports = { store };
+  // Auto React Status + Auto Reply Status handler
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      const from = msg.key?.remoteJid;
+      if (!from || from !== 'status@broadcast') continue;
+
+      const msgType = Object.keys(msg.message || {})[0];
+      const text = (
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text || ''
+      ).toLowerCase();
+
+      // Auto React Status
+      if (config.autoReactStatus) {
+        try {
+          let emoji = '🔥';
+          if (msgType === 'imageMessage') emoji = '😍';
+          else if (msgType === 'videoMessage') emoji = '🎬';
+          else if (msgType === 'audioMessage') emoji = '🎵';
+          else if (text) {
+            if (/sad|huzuni|pole|crying|😢|😭|💔|stress/.test(text)) emoji = '🤗';
+            else if (/happy|furaha|😊|🎉|hongera|congrat/.test(text)) emoji = '🎉';
+            else if (/love|upendo|❤️|💕|mapenzi/.test(text)) emoji = '😍';
+            else if (/motivat|inspir|nguvu|strong|success/.test(text)) emoji = '💪';
+            else if (/funny|haha|lol|😂|🤣/.test(text)) emoji = '😂';
+            else if (/god|mungu|prayer|sala|amen|blessed/.test(text)) emoji = '🙏';
+            else emoji = '👍';
+          }
+          await sock.sendMessage('status@broadcast', {
+            react: { text: emoji, key: msg.key }
+          });
+        } catch (e) {}
+      }
+
+      // Auto Reply Status
+      if (config.autoReplyStatus) {
+        try {
+          const sender = msg.key.participant || msg.key.remoteJid;
+          let reply = '';
+
+          if (msgType === 'imageMessage') {
+            reply = '📸 Picha nzuri sana! 😍';
+          } else if (msgType === 'videoMessage') {
+            reply = '🎬 Video ya kupendeza! 🔥';
+          } else if (msgType === 'audioMessage') {
+            reply = '🎵 Muziki mzuri! 👌';
+          } else if (text) {
+            if (/sad|huzuni|crying|pole|😢|😭|💔|stress|depressed/.test(text)) {
+              const r = ['🤗 Pole sana ndugu. Mambo yatakuwa mazuri!', '💙 Niko nawe. Kila usiku una asubuhi yake.', '🙏 Pole. Subiri, hali itabadilika. Nguvu!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            } else if (/happy|furaha|😊|😁|🎉|hongera|congrat/.test(text)) {
+              const r = ['🎉 Hongera! Furaha yako ni furaha yangu pia!', '😄 Vizuri sana! Endelea hivyo!', '🔥 Hiyo ndiyo! Furahia kikamilifu!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            } else if (/love|upendo|❤️|💕|mapenzi|nakupenda/.test(text)) {
+              const r = ['❤️ Upendo ni uzuri! 😊', '💕 Mapenzi mazuri yanafurihisha moyo!', '🥰 Aww! Hiyo ni ya kupendeza sana!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            } else if (/motivat|inspir|nguvu|strong|success|goal|achieve/.test(text)) {
+              const r = ['💪 Hiyo ndiyo spirit! Endelea kushinda!', '🚀 Mtu wa nguvu! Hakuna kinachoweza kukuzuia!', '🏆 Mindset ya winner! Keep going!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            } else if (/god|mungu|prayer|sala|amen|blessed|baraka/.test(text)) {
+              const r = ['🙏 Amen! Mungu akubariki!', '✝️ Baraka za Mungu ziwe nawe daima!', '🙏 Amina! Mungu ni mwema!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            } else if (/funny|haha|lol|😂|🤣|kuchekesha/.test(text)) {
+              reply = '😂 Hahaha! Umeniua kabisa! 🤣';
+            } else {
+              const r = ['👍 Nice status!', '🔥 Moto! Keep posting!', '😊 Asante kwa kushare!'];
+              reply = r[Math.floor(Math.random() * r.length)];
+            }
+          }
+
+          if (reply && sender) {
+            await sock.sendMessage(sender, { text: reply });
+          }
+        } catch (e) {}
+      }
+    }
+  });
+
+  // AI Chatbot Handler - inajibu inbox na groups kama binadamu
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+
+    for (const msg of messages) {
+      try {
+        const from = msg.key?.remoteJid;
+        if (!from || from === 'status@broadcast') continue;
+
+        // Skip messages za bot yenyewe
+        if (msg.key.fromMe) continue;
+
+        const isGroup = from.endsWith('@g.us');
+        const isInbox = from.endsWith('@s.whatsapp.net');
+
+        // Angalia kama chatbot imewashwa kwa aina hii
+        const shouldReply =
+          (isGroup && config.chatbotGroup) ||
+          (isInbox && config.chatbotInbox);
+
+        if (!shouldReply) continue;
+
+        // Pata text ya message
+        const userText =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          msg.message?.imageMessage?.caption ||
+          '';
+
+        if (!userText || userText.trim() === '') continue;
+
+        // Skip commands (zinaanza na prefix)
+        const prefix = config.prefix || '.';
+        if (userText.startsWith(prefix)) continue;
+
+        // Kwenye group — jibu tu kama bot ametajwa au message ni reply kwa bot
+        if (isGroup) {
+          const botJid = sock.user?.id?.replace(/:\d+/, '') + '@s.whatsapp.net';
+          const mentionedIds = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
+          const isMentioned = mentionedIds.includes(botJid);
+          const isReplyToBot = quotedParticipant === botJid;
+
+          if (!isMentioned && !isReplyToBot) continue;
+        }
+
+        const sender = msg.key.participant || from;
+        const userId = sender.split('@')[0];
+
+        // Onyesha typing indicator
+        await sock.sendPresenceUpdate('composing', from);
+
+        // Pata jibu kutoka Groq AI
+        const reply = await groqReply(userId, userText);
+
+        // Tuma jibu kama quote ya message ya mtumiaji
+        await sock.sendMessage(from, {
+          text: reply,
+        }, { quoted: msg });
+
+        await sock.sendPresenceUpdate('paused', from);
+
+      } catch (e) {
+        // Silent fail — usisimamishe bot
+      }
+    }
+  });
