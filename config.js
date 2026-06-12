@@ -5,10 +5,10 @@
 module.exports = {
     // Bot Owner Configuration
     ownerNumber: ['255623647378'],
-    ownerName: ['MR. MEDIATOR'],
+    ownerName: ['MR.IT MEDIATOR'],
 
     // Bot Configuration
-    botName: 'MR. MEDIATOR',
+    botName: 'MR.IT MEDIATOR',
     prefix: '.',
     sessionName: 'session',
     sessionID: process.env.SESSION_ID || '',
@@ -16,7 +16,7 @@ module.exports = {
     updateZipUrl: '',
 
     // Sticker Configuration
-    packname: 'MR. MEDIATOR',
+    packname: 'MR.IT MEDIATOR',
 
     // Bot Behavior
     selfMode: false,
