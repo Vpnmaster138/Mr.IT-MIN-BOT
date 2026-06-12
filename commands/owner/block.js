@@ -1,39 +1,33 @@
 /**
- * Block Command - Block a user
+ * Block/Unblock User Command
  */
 
 module.exports = {
   name: 'block',
-  aliases: [],
+  aliases: ['blk'],
   category: 'owner',
-  description: 'Block a user',
-  usage: '.block @user or reply',
+  description: 'Block mtumiaji',
+  usage: '.block <number/@mention>',
   ownerOnly: true,
-  
+
   async execute(sock, msg, args, extra) {
     try {
       let target;
-      
-      const ctx = msg.message?.extendedTextMessage?.contextInfo;
-      const mentioned = ctx?.mentionedJid || [];
-      
-      if (mentioned && mentioned.length > 0) {
-        target = mentioned[0];
-      } else if (ctx?.participant && ctx.stanzaId && ctx.quotedMessage) {
-        target = ctx.participant;
+
+      if (msg.message?.extendedTextMessage?.contextInfo?.participant) {
+        target = msg.message.extendedTextMessage.contextInfo.participant;
+      } else if (args[0]) {
+        let num = args[0].replace(/[^0-9]/g, '');
+        target = num + '@s.whatsapp.net';
       } else {
-        return extra.reply('❌ Please mention or reply to a user to block!');
+        return extra.reply('❌ Mention mtu au weka nambari:\n.block 255XXXXXXXXX');
       }
-      
+
       await sock.updateBlockStatus(target, 'block');
-      
-      await sock.sendMessage(extra.from, {
-        text: `✅ @${target.split('@')[0]} has been blocked!`,
-        mentions: [target]
-      }, { quoted: msg });
-      
-    } catch (error) {
-      await extra.reply(`❌ Error: ${error.message}`);
+      await extra.reply(`✅ *${target.split('@')[0]}* amefungwa (blocked)!`);
+
+    } catch (err) {
+      extra.reply(`❌ Error: ${err.message}`);
     }
   }
 };

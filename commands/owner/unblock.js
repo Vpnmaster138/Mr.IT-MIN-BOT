@@ -1,39 +1,27 @@
 /**
- * Unblock Command - Unblock a user
+ * Unblock User Command
  */
 
 module.exports = {
   name: 'unblock',
-  aliases: [],
+  aliases: ['ublk'],
   category: 'owner',
-  description: 'Unblock a user',
-  usage: '.unblock @user or reply',
+  description: 'Unblock mtumiaji',
+  usage: '.unblock <number>',
   ownerOnly: true,
-  
+
   async execute(sock, msg, args, extra) {
     try {
-      let target;
-      
-      const ctx = msg.message?.extendedTextMessage?.contextInfo;
-      const mentioned = ctx?.mentionedJid || [];
-      
-      if (mentioned && mentioned.length > 0) {
-        target = mentioned[0];
-      } else if (ctx?.participant && ctx.stanzaId && ctx.quotedMessage) {
-        target = ctx.participant;
-      } else {
-        return extra.reply('❌ Please mention or reply to a user to unblock!');
-      }
-      
+      if (!args[0]) return extra.reply('❌ Weka nambari: .unblock 255XXXXXXXXX');
+
+      let num = args[0].replace(/[^0-9]/g, '');
+      const target = num + '@s.whatsapp.net';
+
       await sock.updateBlockStatus(target, 'unblock');
-      
-      await sock.sendMessage(extra.from, {
-        text: `✅ @${target.split('@')[0]} has been unblocked!`,
-        mentions: [target]
-      }, { quoted: msg });
-      
-    } catch (error) {
-      await extra.reply(`❌ Error: ${error.message}`);
+      await extra.reply(`✅ *${num}* amefunguliwa (unblocked)!`);
+
+    } catch (err) {
+      extra.reply(`❌ Error: ${err.message}`);
     }
   }
 };

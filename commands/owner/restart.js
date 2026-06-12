@@ -1,44 +1,23 @@
 /**
- * Restart Command - Restart bot (Owner Only)
+ * Restart Bot Command
  */
-
-const { exec } = require('child_process');
 
 module.exports = {
   name: 'restart',
-  aliases: ['reboot', 'reload'],
+  aliases: ['reboot', 'rs'],
   category: 'owner',
-  description: 'Restart the bot (Owner Only)',
+  description: 'Restart bot',
   usage: '.restart',
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
     try {
-      await extra.reply('🔁 Restarting bot...');
-
-      const run = (cmd) =>
-        new Promise((resolve, reject) => {
-          exec(cmd, (error, stdout, stderr) => {
-            if (error) reject(error);
-            else resolve(stdout || stderr);
-          });
-        });
-
-      try {
-        // If running under PM2, this will restart it
-        await run('pm2 restart all');
-        return;
-      } catch (e) {
-        console.log('PM2 not available, falling back to process.exit');
-      }
-
-      // For panels & nodemon – they usually restart on exit
+      await extra.reply('🔄 Bot inafanya restart...\n\n⏳ Subiri sekunde 10-20');
       setTimeout(() => {
-        process.exit(0);
-      }, 500);
-    } catch (error) {
-      console.error('Restart error:', error);
-      await extra.reply(`❌ Error restarting bot: ${error.message}`);
+        process.exit(0); // Railway itaanza upya automatically
+      }, 2000);
+    } catch (err) {
+      extra.reply(`❌ Error: ${err.message}`);
     }
-  },
+  }
 };
