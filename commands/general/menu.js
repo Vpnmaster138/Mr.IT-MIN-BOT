@@ -17,9 +17,8 @@ module.exports = {
       const commands = loadCommands();
       const categories = {};
       
-      // Group commands by category
       commands.forEach((cmd, name) => {
-        if (cmd.name === name) { // Only count main command names, not aliases
+        if (cmd.name === name) {
           if (!categories[cmd.category]) {
             categories[cmd.category] = [];
           }
@@ -36,7 +35,6 @@ module.exports = {
       menuText += `📦 Total Commands: ${commands.size}\n`;
       menuText += `👑 Owner: ${displayOwner}\n\n`;
       
-      // General Commands
       if (categories.general) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🧭 GENERAL COMMAND\n`;
@@ -47,7 +45,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // AI Commands
       if (categories.ai) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🤖 AI COMMAND\n`;
@@ -58,7 +55,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Group Commands
       if (categories.group) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🔵 GROUP COMMAND\n`;
@@ -69,7 +65,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Admin Commands
       if (categories.admin) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🛡️ ADMIN COMMAND\n`;
@@ -80,7 +75,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Owner Commands
       if (categories.owner) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 👑 OWNER COMMAND\n`;
@@ -91,7 +85,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Media Commands
       if (categories.media) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🎞️ MEDIA COMMAND\n`;
@@ -102,7 +95,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Fun Commands
       if (categories.fun) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🎭 FUN COMMAND\n`;
@@ -113,7 +105,6 @@ module.exports = {
         menuText += `\n`;
       }
       
-      // Utility Commands
       if (categories.utility) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🔧 UTILITY COMMAND\n`;
@@ -124,8 +115,7 @@ module.exports = {
         menuText += `\n`;
       }
 
-       // Anime Commands
-       if (categories.anime) {
+      if (categories.anime) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 👾 ANIME COMMAND\n`;
         menuText += `┗━━━━━━━━━━━━━━━━━\n`;
@@ -135,8 +125,7 @@ module.exports = {
         menuText += `\n`;
       }
 
-       // Textmaker Commands
-       if (categories.utility) {
+      if (categories.textmaker) {
         menuText += `┏━━━━━━━━━━━━━━━━━\n`;
         menuText += `┃ 🖋️ TEXTMAKER COMMAND\n`;
         menuText += `┗━━━━━━━━━━━━━━━━━\n`;
@@ -151,29 +140,18 @@ module.exports = {
       menuText += `🌟 Bot Version: 1.0.0\n`;
       if (config.social && config.social.group) {
         menuText += `🔗 Join Group: ${config.social.group}\n`;
-      };
+      }
       
-      // Send menu with image
       const fs = require('fs');
       const path = require('path');
       const imagePath = path.join(__dirname, '../../utils/bot_image.jpg');
       
       if (fs.existsSync(imagePath)) {
-        // Send image with newsletter forwarding context
         const imageBuffer = fs.readFileSync(imagePath);
         await sock.sendMessage(extra.from, {
           image: imageBuffer,
           caption: menuText,
-          mentions: [extra.sender],
-          contextInfo: {
-            forwardingScore: 1,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: config.newsletterJid || '120363161513685998@newsletter',
-              newsletterName: config.botName,
-              serverMessageId: -1
-            }
-          }
+          mentions: [extra.sender]
         }, { quoted: msg });
       } else {
         await sock.sendMessage(extra.from, {
