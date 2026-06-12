@@ -16,7 +16,7 @@ module.exports = {
   async execute(sock, msg, args) {
     try {
       // Get instance-specific config
-      const instanceConfig = config.getConfigFromSocket(sock);
+      const instanceConfig = config;
 
       const text = args.join(' ');
       const chatId = msg.key.remoteJid;
