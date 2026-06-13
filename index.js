@@ -423,6 +423,44 @@ async function startBot() {
             // Silently handle
           }
         }
+
+        // AI Chatbot - inajibu inbox na groups kama binadamu
+        try {
+          const isGroup = from.endsWith('@g.us');
+          const isInbox = from.endsWith('@s.whatsapp.net');
+          const shouldChat =
+            (isGroup && config.chatbotGroup) ||
+            (isInbox && config.chatbotInbox);
+
+          if (shouldChat && !msg.key.fromMe) {
+            const userText =
+              msg.message?.conversation ||
+              msg.message?.extendedTextMessage?.text ||
+              msg.message?.imageMessage?.caption || '';
+
+            const prefix = config.prefix || '.';
+            const isCommand = userText.startsWith(prefix);
+
+            // Groups: jibu tu kama bot ametajwa au quoted
+            let canReply = true;
+            if (isGroup) {
+              const botJid = sock.user?.id?.replace(/:\d+/, '') + '@s.whatsapp.net';
+              const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+              const quotedBy = msg.message?.extendedTextMessage?.contextInfo?.participant;
+              canReply = mentioned.includes(botJid) || quotedBy === botJid;
+            }
+
+            if (userText && !isCommand && canReply) {
+              const sender = msg.key.participant || from;
+              const userId = sender.split('@')[0];
+              await sock.sendPresenceUpdate('composing', from);
+              const reply = await groqReply(userId, userText);
+              await sock.sendMessage(from, { text: reply }, { quoted: msg });
+              await sock.sendPresenceUpdate('paused', from);
+            }
+          }
+        } catch (e) {}
+
       });
     }
   });
@@ -620,70 +658,4 @@ module.exports = { store };
     }
   });
 
-  // AI Chatbot Handler - inajibu inbox na groups kama binadamu
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
 
-    for (const msg of messages) {
-      try {
-        const from = msg.key?.remoteJid;
-        if (!from || from === 'status@broadcast') continue;
-
-        // Skip messages za bot yenyewe
-        if (msg.key.fromMe) continue;
-
-        const isGroup = from.endsWith('@g.us');
-        const isInbox = from.endsWith('@s.whatsapp.net');
-
-        // Angalia kama chatbot imewashwa kwa aina hii
-        const shouldReply =
-          (isGroup && config.chatbotGroup) ||
-          (isInbox && config.chatbotInbox);
-
-        if (!shouldReply) continue;
-
-        // Pata text ya message
-        const userText =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.imageMessage?.caption ||
-          '';
-
-        if (!userText || userText.trim() === '') continue;
-
-        // Skip commands (zinaanza na prefix)
-        const prefix = config.prefix || '.';
-        if (userText.startsWith(prefix)) continue;
-
-        // Kwenye group — jibu tu kama bot ametajwa au message ni reply kwa bot
-        if (isGroup) {
-          const botJid = sock.user?.id?.replace(/:\d+/, '') + '@s.whatsapp.net';
-          const mentionedIds = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-          const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
-          const isMentioned = mentionedIds.includes(botJid);
-          const isReplyToBot = quotedParticipant === botJid;
-
-          if (!isMentioned && !isReplyToBot) continue;
-        }
-
-        const sender = msg.key.participant || from;
-        const userId = sender.split('@')[0];
-
-        // Onyesha typing indicator
-        await sock.sendPresenceUpdate('composing', from);
-
-        // Pata jibu kutoka Groq AI
-        const reply = await groqReply(userId, userText);
-
-        // Tuma jibu kama quote ya message ya mtumiaji
-        await sock.sendMessage(from, {
-          text: reply,
-        }, { quoted: msg });
-
-        await sock.sendPresenceUpdate('paused', from);
-
-      } catch (e) {
-        // Silent fail — usisimamishe bot
-      }
-    }
-  });
