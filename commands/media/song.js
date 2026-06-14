@@ -6,8 +6,23 @@ const yts = require('yt-search');
 const axios = require('axios');
 const { toAudio } = require('../../utils/converter');
 
-// ── API Keys ──
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '6302dd380amsh9115a6be5092cf2p1ca0e9jsn757c120ac58a';
+
+// Extract YouTube video ID from any URL format
+function extractVideoId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([^&\s]{11})/,
+    /(?:youtu\.be\/)([^?\s]{11})/,
+    /(?:youtube\.com\/embed\/)([^?\s]{11})/,
+    /(?:youtube\.com\/shorts\/)([^?\s]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 module.exports = {
   name: 'song',
@@ -29,9 +44,15 @@ module.exports = {
       // Tafuta video YouTube
       let video;
       if (text.includes('youtube.com') || text.includes('youtu.be')) {
-        const id = text.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1];
-        const search = await yts({ videoId: id });
-        video = { ...search, url: text };
+        const id = extractVideoId(text);
+        if (id) {
+          try {
+            const search = await yts({ videoId: id });
+            video = { ...search, url: `https://www.youtube.com/watch?v=${id}`, videoId: id };
+          } catch (e) {
+            video = { url: text, title: 'Unknown', timestamp: '', videoId: id };
+          }
+        }
       } else {
         const search = await yts(text);
         if (!search?.videos?.length) {
@@ -40,24 +61,37 @@ module.exports = {
           }, { quoted: msg });
         }
         video = search.videos[0];
+        video.videoId = extractVideoId(video.url);
       }
 
-      // Notify user
+      if (!video) {
+        return await sock.sendMessage(chatId, {
+          text: '❌ Haikuweza kupata video. Jaribu tena.'
+        }, { quoted: msg });
+      }
+
+      const videoId = video.videoId || extractVideoId(video.url);
+      if (!videoId) {
+        return await sock.sendMessage(chatId, {
+          text: '❌ Video ID haikupatikana. Tuma YouTube link kamili.'
+        }, { quoted: msg });
+      }
+
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
       await sock.sendMessage(chatId, {
-        text: `⏳ Inadownload...\n\n🎵 *${video.title}*\n⏱️ ${video.timestamp || ''}`
+        text: `⏳ Inadownload...\n\n🎵 *${video.title || text}*\n⏱️ ${video.timestamp || ''}`
       }, { quoted: msg });
 
-      const videoId = video.url.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1];
-      if (!videoId) throw new Error('Video ID haikupatikana');
-
       let audioBuffer = null;
-      let songTitle = video.title;
+      let songTitle = video.title || text;
 
       // ══════════════════════════════════════
-      // API 1: youtube-mp36 (RapidAPI) - Reliable sana
+      // API 1: youtube-mp36 (RapidAPI)
       // ══════════════════════════════════════
       if (!audioBuffer) {
         try {
+          console.log(`API 1: Trying videoId=${videoId}`);
           const res = await axios.get('https://youtube-mp36.p.rapidapi.com/dl', {
             params: { id: videoId },
             headers: {
@@ -67,12 +101,14 @@ module.exports = {
             timeout: 30000
           });
 
+          console.log('API 1 response:', JSON.stringify(res.data).slice(0, 200));
+
           let dlUrl = res.data?.link;
           songTitle = res.data?.title || songTitle;
 
-          // Poll kama bado inachakata
           if (!dlUrl && res.data?.status === 'processing') {
-            for (let i = 0; i < 6; i++) {
+            await sock.sendMessage(chatId, { text: '⏳ Inachakata... subiri kidogo' }, { quoted: msg });
+            for (let i = 0; i < 8; i++) {
               await new Promise(r => setTimeout(r, 5000));
               const poll = await axios.get('https://youtube-mp36.p.rapidapi.com/dl', {
                 params: { id: videoId },
@@ -82,31 +118,36 @@ module.exports = {
                 },
                 timeout: 30000
               });
-              if (poll.data?.link) { dlUrl = poll.data.link; break; }
+              console.log(`Poll ${i+1}:`, poll.data?.status, poll.data?.link?.slice(0,50));
+              if (poll.data?.link) { dlUrl = poll.data.link; songTitle = poll.data.title || songTitle; break; }
             }
           }
 
           if (dlUrl) {
             const r = await axios.get(dlUrl, {
               responseType: 'arraybuffer',
-              timeout: 90000,
+              timeout: 120000,
               maxContentLength: Infinity
             });
-            if (r.data?.byteLength > 0) audioBuffer = Buffer.from(r.data);
+            if (r.data?.byteLength > 0) {
+              audioBuffer = Buffer.from(r.data);
+              console.log('API 1 success! Size:', audioBuffer.length);
+            }
           }
         } catch (e) {
-          console.log('API 1 failed:', e.message);
+          console.log('API 1 failed:', e.message, e.response?.status);
         }
       }
 
       // ══════════════════════════════════════
-      // API 2: cobalt.tools (Free, no key)
+      // API 2: cobalt.tools (Free)
       // ══════════════════════════════════════
       if (!audioBuffer) {
         try {
+          console.log('API 2: Trying cobalt.tools...');
           const res = await axios.post(
             'https://api.cobalt.tools/api/json',
-            { url: video.url, aFormat: 'mp3', isAudioOnly: true },
+            { url: videoUrl, aFormat: 'mp3', isAudioOnly: true },
             {
               headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
               timeout: 30000
@@ -116,10 +157,13 @@ module.exports = {
           if (dlUrl) {
             const r = await axios.get(dlUrl, {
               responseType: 'arraybuffer',
-              timeout: 90000,
+              timeout: 120000,
               maxContentLength: Infinity
             });
-            if (r.data?.byteLength > 0) audioBuffer = Buffer.from(r.data);
+            if (r.data?.byteLength > 0) {
+              audioBuffer = Buffer.from(r.data);
+              console.log('API 2 success! Size:', audioBuffer.length);
+            }
           }
         } catch (e) {
           console.log('API 2 failed:', e.message);
@@ -127,36 +171,35 @@ module.exports = {
       }
 
       // ══════════════════════════════════════
-      // API 3: y2mate.guru (Free, no key)
+      // API 3: yt5s.io (Free)
       // ══════════════════════════════════════
       if (!audioBuffer) {
         try {
+          console.log('API 3: Trying yt5s.io...');
           const res1 = await axios.post(
-            'https://www.y2mate.com/mates/analyzeV2/ajax',
-            `k_query=${encodeURIComponent(video.url)}&k_page=Youtube&hl=en&q_auto=1`,
+            'https://yt5s.io/api/ajaxSearch',
+            `q=${encodeURIComponent(videoUrl)}&vt=mp3`,
             {
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': 'https://yt5s.io',
+                'Referer': 'https://yt5s.io/'
+              },
               timeout: 20000
             }
           );
-          const vid = res1.data?.vid;
-          if (vid) {
-            const res2 = await axios.post(
-              'https://www.y2mate.com/mates/convertV2/index',
-              `vid=${vid}&k=mp3`,
-              {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                timeout: 20000
-              }
-            );
-            const dlUrl = res2.data?.dlink;
-            if (dlUrl) {
-              const r = await axios.get(dlUrl, {
-                responseType: 'arraybuffer',
-                timeout: 90000,
-                maxContentLength: Infinity
-              });
-              if (r.data?.byteLength > 0) audioBuffer = Buffer.from(r.data);
+          const links = res1.data?.links?.mp3;
+          const dlUrl = links?.mp3128?.url || links?.mp3320?.url || links?.mp3?.url;
+          if (dlUrl) {
+            const r = await axios.get(dlUrl, {
+              responseType: 'arraybuffer',
+              timeout: 120000,
+              maxContentLength: Infinity
+            });
+            if (r.data?.byteLength > 0) {
+              audioBuffer = Buffer.from(r.data);
+              console.log('API 3 success! Size:', audioBuffer.length);
             }
           }
         } catch (e) {
@@ -165,30 +208,25 @@ module.exports = {
       }
 
       // ══════════════════════════════════════
-      // API 4: yt5s.io (Free, no key)
+      // API 4: snap.yt (Free)
       // ══════════════════════════════════════
       if (!audioBuffer) {
         try {
-          const res1 = await axios.post(
-            'https://yt5s.io/api/ajaxSearch',
-            `q=${encodeURIComponent(video.url)}&vt=mp3`,
-            {
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-              },
-              timeout: 20000
-            }
-          );
-          const links = res1.data?.links?.mp3;
-          const dlUrl = links?.mp3128?.url || links?.mp3?.url;
+          console.log('API 4: Trying snap.yt...');
+          const res = await axios.get(`https://snap.yt/api/?url=${encodeURIComponent(videoUrl)}`, {
+            timeout: 20000
+          });
+          const dlUrl = res.data?.url?.mp3 || res.data?.mp3;
           if (dlUrl) {
             const r = await axios.get(dlUrl, {
               responseType: 'arraybuffer',
-              timeout: 90000,
+              timeout: 120000,
               maxContentLength: Infinity
             });
-            if (r.data?.byteLength > 0) audioBuffer = Buffer.from(r.data);
+            if (r.data?.byteLength > 0) {
+              audioBuffer = Buffer.from(r.data);
+              console.log('API 4 success! Size:', audioBuffer.length);
+            }
           }
         } catch (e) {
           console.log('API 4 failed:', e.message);
@@ -196,7 +234,7 @@ module.exports = {
       }
 
       // ══════════════════════════════════════
-      // Hakuna API iliyofanya kazi
+      // Zote zimefail
       // ══════════════════════════════════════
       if (!audioBuffer || audioBuffer.length === 0) {
         return await sock.sendMessage(chatId, {
